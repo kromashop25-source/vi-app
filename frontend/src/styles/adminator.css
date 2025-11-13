@@ -1,0 +1,134 @@
+/* Sidebar ancho fijo para desktop; sin inline styles */
+.vi-sidebar {
+  width: 240px;
+}
+
+/* Opcional: comportamiento responsive */
+@media (max-width: 991.98px) {
+  .vi-sidebar { width: 220px; }
+}
+@media (max-width: 575.98px) {
+  .vi-sidebar { width: 100%; }
+}
+
+.vi-topbar {
+  z-index: 1030; /* sobre el sidebar/borders */
+  box-shadow: 0 1px 0 rgba(0,0,0,.06);
+}
+
+/* ---- Bancadas / Adminator table vibes ---- */
+.vi-card-table .table {
+  margin-bottom: 0; /* el body del card ya tiene padding */
+}
+.vi-card-table thead th {
+  text-transform: uppercase;
+  font-size: .75rem;
+  letter-spacing: .02em;
+  color: #6c757d;
+  background: #f8f9fa;
+  border-bottom-color: #e9ecef;
+}
+.vi-badge-estado {
+  font-weight: 600;
+  min-width: 2rem;
+  display: inline-block;
+  text-align: center;
+}
+
+/* Anchuras de columnas para la tabla de Bancadas (sin inline styles) */
+.table .vi-col-60  th,
+.table .vi-col-60  td { width: 60px; }
+.table .vi-col-140 th,
+.table .vi-col-140 td { width: 140px; }
+.table .vi-col-160 th,
+.table .vi-col-160 td { width: 160px; }
+
+/* ---- UI helpers: Toast + Spinner overlay ---- */
+.vi-toast-container{ z-index:1080; } /* por encima de modales */
+.vi-spinner-overlay{
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,.6);
+  z-index:1075;
+}
+
+/* === Login split layout (sin estilos inline) ========================= */
+.vi-login {
+  min-height: 100vh;
+}
+.vi-login__split {
+  display: flex;
+  min-height: inherit;
+}
+.vi-login__left {
+  flex: 1 1 45%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #fff;
+  background: linear-gradient(135deg, #2e7dff 0%, #00c2ff 100%);
+}
+.vi-login__left .vi-badge {
+  font-size: .875rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .85;
+}
+.vi-login__left .vi-title {
+  font-weight: 700;
+  line-height: 1.15;
+}
+.vi-login__right {
+  flex: 1 1 55%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+.vi-login__card {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ====== VI Login (layout dividido) ====== */
+.vi-login { padding: 0; }
+.vi-login__split {
+  display: flex;
+  min-height: calc(100vh - 56px); /* altura aproximada del topbar */
+}
+.vi-login__left {
+  flex: 1;
+  background: linear-gradient(135deg, #0d6efd 0%, #0bb7f4 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+}
+.vi-badge {
+  width: 56px; height: 56px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.15);
+  border: 1px solid rgba(255,255,255,.35);
+  font-weight: 700; letter-spacing: .5px;
+}
+.vi-title { color: #fff; }
+.vi-login__right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+.vi-login__card {
+  width: 100%;
+  max-width: 560px;
+  border-radius: 1rem;
+}
+@media (max-width: 992px) {
+  .vi-login__split { flex-direction: column; min-height: 100vh; }
+  .vi-login__left { min-height: 220px; }
+}
