@@ -19,20 +19,29 @@ export type QBlock = {
   c6?: number | null;
   c7?: number | null;
 };
-export type BancadaCreate = {
+
+// Nueva estructura para una fila individual de la bancada
+export type BancadaRow = {
   medidor?: string | null;
-  estado: number;
-  rows: number;
   q3?: QBlock | null;
   q2?: QBlock | null;
   q1?: QBlock | null;
 };
+
+export type BancadaCreate = {
+  estado: number;
+  rows: number;
+  // Ahora enviamos la data completa de las filas
+  rowsData: BancadaRow[];
+};
 export type BancadaRead = {
   id: number;
   item: number;
+  // Mantenemos comptibilidad visual en lista, pero la data real está en rowsData
   medidor?: string | null;
   estado: number;
   rows: number;
+  rowsData?: BancadaRow[];
   q3?: QBlock | null;
   q2?: QBlock | null;
   q1?: QBlock | null;

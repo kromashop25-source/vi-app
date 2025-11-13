@@ -96,21 +96,19 @@ export default function OiPage() {
       setBusy(true);
 
       const payload = {
-        medidor: form.medidor ?? "",
         estado: Number(form.estado),
-        rows: Number(form.rows ?? 15),
-        q3: form.q3,
-        q2: form.q2,
-        q1: form.q1,
+        rows: Number(form.rowsData.length),
+        rowsData: form.rowsData,
       };
 
       if (editing) {
         const upd = await updateBancada(editing.id, payload);
-        setBancadas(prev => prev.map(x => x.id === upd.id ? upd : x));
+        // Aseguramos tener rowsData localmente para que al reabrir el modal se vean los datos
+        setBancadas(prev => prev.map(x => x.id === upd.id ? { ...upd, rowsData: form.rowsData } : x));
         toast({ kind:"success", message:"Bancada actualizada" });
       } else {
         const created = await addBancada(oiId, payload);
-        setBancadas(prev => [...prev, created]);
+        setBancadas(prev => [...prev, { ...created, rowsData: form.rowsData }]);
         toast({ kind:"success", message:"Bancada agregada" });
       }
       setShowModal(false);
@@ -269,41 +267,49 @@ export default function OiPage() {
                     </td>
                   </tr>
                 )}
-                {bancadas.map(b => (
-                  <tr key={b.id}>
-                    <td>{b.item}</td>
-                    <td>{b.medidor ?? ""}</td>
-                    <td>
-                      <span
-                        className={`badge vi-badge-estado ${estadoClass(b.estado)}`}
-                        title={estadoLabel(b.estado)}
-                      >
-                        {b.estado}
-                      </span>
-                    </td>
-                    <td>{b.rows}</td>
-                    <td className="text-end">
-                      <button
-                        className="btn btn-sm btn-outline-primary me-2"
-                        onClick={() => openEdit(b)}
-                        disabled={busy}
-                        aria-label={`Editar bancada #${b.item}`}
-                        title="Editar"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleDelete(b)}
-                        disabled={busy}
-                        aria-label={`Eliminar bancada #${b.item}`}
-                        title="Eliminar"
-                      >
-                        🗑️
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {bancadas.map(b => {
+                  // ABRIMOS LLAVES AQUÍ PARA PODER USAR LOGICA JAVASCRIPT
+                  const firstM = b.rowsData?.[0]?.medidor || b.medidor || "";
+                  const lastM = b.rowsData?.[(b.rowsData?.length || 0) - 1]?.medidor || "";
+                  const displayMed = (firstM && lastM && firstM !== lastM) ? `${firstM} ... ${lastM}` : firstM;
+
+                  // AHORA HACEMOS EL RETURN DEL JSX
+                  return (
+                    <tr key={b.id}>
+                      <td>{b.item}</td>
+                      <td>{displayMed}</td>
+                      <td>
+                        <span
+                          className={`badge vi-badge-estado ${estadoClass(b.estado)}`}
+                          title={estadoLabel(b.estado)}
+                        >
+                          {b.estado}
+                        </span>
+                      </td>
+                      <td>{b.rows}</td>
+                      <td className="text-end">
+                        <button
+                          className="btn btn-sm btn-outline-primary me-2"
+                          onClick={() => openEdit(b)}
+                          disabled={busy}
+                          aria-label={`Editar bancada #${b.item}`}
+                          title="Editar"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleDelete(b)}
+                          disabled={busy}
+                          aria-label={`Eliminar bancada #${b.item}`}
+                          title="Eliminar"
+                        >
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -316,12 +322,25 @@ export default function OiPage() {
         initial={
           editing
             ? {
-                medidor: editing.medidor ?? "",
                 estado: editing.estado,
                 rows: editing.rows,
-                q3: editing.q3 ?? {},
-                q2: editing.q2 ?? {},
-                q1: editing.q1 ?? {},
+                // CORRECCIÓN ROBUSTA: Mapeamos SIEMPRE para eliminar nulls
+                rowsData: editing.rowsData 
+                  ? editing.rowsData.map(r => ({
+                      // Si medidor es null, lo forzamos a "" para que el formulario no se queje
+                      medidor: r.medidor ?? "",
+                      // Si los bloques son null, pasamos objeto vacío {}
+                      q3: r.q3 ?? {},
+                      q2: r.q2 ?? {},
+                      q1: r.q1 ?? {},
+                    }))
+                  : Array.from({ length: editing.rows }).map((_, i) => ({
+                      // Fallback para bancadas antiguas sin rowsData
+                      medidor: i === 0 ? (editing.medidor ?? "") : "", 
+                      q3: (i === 0 && editing.q3) ? editing.q3 : {},
+                      q2: (i === 0 && editing.q2) ? editing.q2 : {},
+                      q1: (i === 0 && editing.q1) ? editing.q1 : {},
+                    }))
               }
             : undefined
         }
