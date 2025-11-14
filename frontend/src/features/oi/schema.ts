@@ -19,6 +19,9 @@ const QBlockSchema = z.object({
   c5: z.number().optional().nullable(),
   c6: z.number().optional().nullable(),
   c7: z.number().optional().nullable(),
+  // Campos calculados (visuales)
+  caudal: z.number().optional().nullable(),
+  error: z.number().optional().nullable(),
 });
 
 export const BancadaRowSchema = z.object({
@@ -26,6 +29,8 @@ export const BancadaRowSchema = z.object({
   q3: QBlockSchema.optional(),
   q2: QBlockSchema.optional(),
   q1: QBlockSchema.optional(),
+  // Resultado final
+  conformidad: z.string().optional(),
 });
 
 export type BancadaRowForm = z.infer<typeof BancadaRowSchema>;

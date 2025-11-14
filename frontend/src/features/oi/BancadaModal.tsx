@@ -27,6 +27,59 @@ function incrementMedidor(base: string, index: number): string {
   return `${prefix}${nextVal.toString().padStart(numStr.length, "0")}`;
 }
 
+// --- Lógica de Cálculos en Tiempo Real --
+
+// Parsea tiempo "m:ss,ms" (ej: 1:02,5") a horas decimales
+function parseTime(val?: number | string | null): number {
+  if (!val) return 0;
+  const s = String(val).trim();
+  // Asumimos formato m.ss,ms o m:ss.ms según como lo digite el usuario.
+  // Si es un número directo de excel (ej. 1.5 min), lo tratamos diferente.
+  // Aquí asumiremos que el usuario digita "1.30" para 1 min 30 seg si es number input
+  // Ojo: El input type="number" en HTML no deja poner ":". 
+  // Si usas type="number", el usuario escribirá 1.30 (1 min 30 seg).
+  // Adaptamos la lógica para input numérico: Parte entera = min, Parte decimal = seg.
+  const num = Number(val);
+  if (isNaN(num)) return 0;
+  
+  const minutes = Math.floor(num);
+  const secondsDecimal = (num - minutes) * 100; // .30 -> 30
+  // Fórmula del txt: (Q*60 + R) / 3600
+  // (Min * 60 + Seg) / 3600 = Horas
+  const totalSeconds = (minutes * 60) + secondsDecimal;
+  return totalSeconds > 0 ? totalSeconds / 3600 : 0;
+}
+
+function calcFlow(vol?: number | null, timeVal?: number | null): number | null {
+  if (!vol || !timeVal) return null;
+  const hours = parseTime(timeVal);
+  if (hours === 0) return null;
+  return vol / hours; // Caudal = Vol / Tiempo(h)
+}
+
+function calcError(li?: number | null, lf?: number | null, vol?: number | null): number | null {
+  if (li === undefined || lf === undefined || !vol) return null;
+  // ((LF - LI - Vol) / Vol) * 100
+  return ((Number(lf) - Number(li) - Number(vol)) / Number(vol)) * 100;
+}
+
+// Evalúa conformidad simple (basada solo en estado físico por ahora, o lógica BB/BC/BL si se requiere completa)
+function calcConformity(estado: number, errQ3: number|null, errQ2: number|null, errQ1: number|null): string {
+  if (estado >= 1) return "NO CONFORME"; // Muerte súbita por estado físico
+  // Aquí podrías expandir con la lógica de errores máximos permitidos (EMP)
+  // Por simplicidad visual:
+  if (errQ3 === null || errQ2 === null || errQ1 === null) return "";
+  // Lógica placeholder: si todos existen, asumimos cálculo pendiente o "VER EXCEL"
+  return "CALCULADO"; 
+}
+// CORRECCIÓN: Componente auxiliar movido FUERA del componente principal para evitar warnings y remounts
+const RenderResult = ({ val, isErr }: { val: number | null | undefined, isErr?: boolean }) => {
+  if (val == null || isNaN(val)) return <td className="bg-light"></td>;
+  const color = isErr ? (Math.abs(val) > 5 ? "text-danger fw-bold" : "text-dark") : "text-primary";
+  return <td className="bg-light"><span className={`small ${color}`}>{val.toFixed(2)}</span></td>;
+};
+
+
 
 export default function BancadaModal({ show, title, initial, onClose, onSubmit }: Props) {
   const defaultValues: BancadaForm = {
@@ -42,6 +95,9 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
   // Observar la fila 1 para replicar
   const firstRow = useWatch({ control, name: "rowsData.0" });
   const allRows = useWatch({ control, name: "rowsData" });
+
+  // CORRECCIÓN: Vigilamos el estado para que el cálculo de AT sea reactivo
+  const currentEstado = useWatch({ control, name: "estado" });
 
   // Lógica de replicación y autoincremento
   useEffect(() => {
@@ -111,7 +167,7 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-dialog modal-xl" style={{maxWidth: "95vw"}}>
+      <div className="modal-dialog modal-fluid" style={{maxWidth: "98vw", margin: "1vw"}}>
         <div className="modal-content">
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="modal-header">
@@ -159,9 +215,13 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
                     <tr>
                       <th style={{width:"30px"}}>#</th>
                       <th style={{width:"120px"}}># Medidor (G)</th>
-                      <th className="table-primary border-start border-dark" colSpan={7}>Q3 (J..P)</th>
-                      <th className="table-success border-start border-dark" colSpan={7}>Q2 (V..AB)</th>
-                      <th className="table-info border-start border-dark" colSpan={7}>Q1 (AH..AN)</th>
+                      {/* Q3 Expanded: J..P + T, U */}
+                      <th className="table-primary border-start border-dark" colSpan={9}>Q3 (Nominal)</th>
+                      {/* Q2 Expanded: V..AB + AF, AG */}
+                      <th className="table-success border-start border-dark" colSpan={9}>Q2 (Transición)</th>
+                      {/* Q1 Expanded: AH..AN + AR, AS */}
+                      <th className="table-info border-start border-dark" colSpan={9}>Q1 (Mínimo)</th>
+                      <th className="bg-warning text-dark border-start border-dark" style={{width:"100px"}}>AT</th>
                     </tr>
                     <tr style={{fontSize:"0.75rem"}}>
                       <th></th><th></th>
@@ -170,21 +230,63 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
                       <th title="M" className="text-primary fw-bold">L.I.</th>
                       <th title="N" className="text-primary fw-bold">L.F.</th>
                       <th title="O">Vol</th><th title="P">Tpo</th>
+                      <th title="T (Caudal)" className="bg-light border-start text-muted">Q</th>
+                      <th title="U (Error %)" className="bg-light text-muted">E%</th>
                       {/* Q2 */}
                       <th title="V" className="border-start border-dark">Temp</th><th title="W">P.Ent</th><th title="X">P.Sal</th>
                       <th title="Y" className="text-success fw-bold">L.I.</th>
                       <th title="Z" className="text-success fw-bold">L.F.</th>
                       <th title="AA">Vol</th><th title="AB">Tpo</th>
+                      <th title="AF (Caudal)" className="bg-light border-start text-muted">Q</th>
+                      <th title="AG (Error %)" className="bg-light text-muted">E%</th>
                       {/* Q1 */}
                       <th title="AH" className="border-start border-dark">Temp</th><th title="AI">P.Ent</th><th title="AJ">P.Sal</th>
                       <th title="AK">L.I.</th>
                       <th title="AL" className="text-info fw-bold">L.F.</th>
                       <th title="AM">Vol</th><th title="AN">Tpo</th>
+                      <th title="AR (Caudal)" className="bg-light border-start text-muted">Q</th>
+                      <th title="AS (Error %)" className="bg-light text-muted">E%</th>
+                      <th title="AT (Conformidad)" className="bg-warning">Est</th>
                     </tr>
                   </thead>
                   <tbody>
                     {fields.map((field, index) => {
                       const isBase = index === 0;
+                      // Obtenemos valores para cálculo en vivo (usando watch interno o getValues si no es costoso,
+                      // pero para renderizado fluido en tabla grande, mejor usar los values controlados).
+                      // Nota: useWatch es mejor, pero aquí accederemos directo a los inputs registrados.
+                      // Para simplificar la demo visual, calcularemos con los valores actuales del form state si es posible,
+                      // o dejaremos que el usuario "guarde" para ver.
+                      // MEJORA: Calcular con variables locales extraídas del `allRows` si se usa useWatch global.
+                      const rowData = allRows?.[index] || {};
+                      
+                      // Cálculos Q3
+                      const q3_vol = rowData.q3?.c6; // O
+                      const q3_time = rowData.q3?.c7; // P
+                      const q3_li = rowData.q3?.c4; // M
+                      const q3_lf = rowData.q3?.c5; // N
+                      const q3_flow = calcFlow(q3_vol, q3_time);
+                      const q3_err = calcError(q3_li, q3_lf, q3_vol);
+
+                      // Cálculos Q2
+                      const q2_vol = rowData.q2?.c6; // AA
+                      const q2_time = rowData.q2?.c7; // AB
+                      const q2_li = rowData.q2?.c4; // Y
+                      const q2_lf = rowData.q2?.c5; // Z
+                      const q2_flow = calcFlow(q2_vol, q2_time);
+                      const q2_err = calcError(q2_li, q2_lf, q2_vol);
+
+                      // Cálculos Q1
+                      const q1_vol = rowData.q1?.c6; // AM
+                      const q1_time = rowData.q1?.c7; // AN
+                      const q1_li = rowData.q1?.c4; // AK
+                      const q1_lf = rowData.q1?.c5; // AL
+                      const q1_flow = calcFlow(q1_vol, q1_time);
+                      const q1_err = calcError(q1_li, q1_lf, q1_vol);
+
+                      // Usamos el estado reactivo (currentEstado) en vez de getValues
+                      const conformidad = calcConformity(currentEstado, q3_err, q2_err, q1_err);
+
                       return (
                         <tr key={field.id} className={isBase ? "table-warning" : ""}>
                           <td className="text-muted small">{index + 1}</td>
@@ -199,7 +301,9 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
                           <td className="bg-white"><input type="number" step="any" className="form-control form-control-sm p-0 text-center fw-bold text-primary" {...register(`rowsData.${index}.q3.c5`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q3.c6`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q3.c7`, {valueAsNumber:true})} /></td>
-                          
+                          <RenderResult val={q3_flow} />
+                          <RenderResult val={q3_err} isErr />
+
                           {/* Q2 */}
                           <td className="border-start border-dark"><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q2.c1`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q2.c2`, {valueAsNumber:true})} /></td>
@@ -208,6 +312,8 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
                           <td className="bg-white"><input type="number" step="any" className="form-control form-control-sm p-0 text-center fw-bold text-success" {...register(`rowsData.${index}.q2.c5`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q2.c6`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q2.c7`, {valueAsNumber:true})} /></td>
+                          <RenderResult val={q2_flow} />
+                          <RenderResult val={q2_err} isErr />
 
                           {/* Q1 */}
                           <td className="border-start border-dark"><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q1.c1`, {valueAsNumber:true})} /></td>
@@ -217,7 +323,11 @@ export default function BancadaModal({ show, title, initial, onClose, onSubmit }
                           <td className="bg-white"><input type="number" step="any" className="form-control form-control-sm p-0 text-center fw-bold text-info" {...register(`rowsData.${index}.q1.c5`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q1.c6`, {valueAsNumber:true})} /></td>
                           <td><input type="number" step="any" className="form-control form-control-sm p-0 text-center" disabled={!isBase} {...register(`rowsData.${index}.q1.c7`, {valueAsNumber:true})} /></td>
-                        </tr>
+                          <RenderResult val={q1_flow} />
+                          <RenderResult val={q1_err} isErr />
+                          
+                          <td className="bg-light border-start fw-bold small text-center">{conformidad}</td>
+                         </tr>
                       );
                     })}
                   </tbody>

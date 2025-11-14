@@ -5,6 +5,7 @@ from datetime import datetime
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.cell import column_index_from_string
+from openpyxl.utils.cell import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Border, Side
 from openpyxl.workbook.protection import WorkbookProtection
@@ -218,21 +219,47 @@ def generate_excel(oi: OI, bancadas: Iterable[Bancada], password: str | None = N
             if medidor_col:
                 ws.cell(row=r, column=medidor_col, value=val_medidor or "")
 
-            # Col H: Presión
+            # --- LÓGICA DE REPLICACIÓN VERTICAL (FILA MAESTRA VS ESCLAVA) ---
+            # Si es la fila base (k=0), escribimos el valor.
+            # Si es fila esclava (k>0), escribimos referencia a la fila anterior (r-1).
+            
+            # Col H: Presión (Referencia Vertical)
             if presion_val is not None:
-                ws.cell(row=r, column=8, value=presion_val)
+                if k == 0:
+                    ws.cell(row=r, column=8, value=presion_val)
+                else:
+                    ws.cell(row=r, column=8, value=f"=H{r-1}")
 
-            # Col I: Estado
-            ws.cell(row=r, column=estado_col, value=(b.estado if b.estado is not None else 0))
+            # Col I: Estado (Referencia Vertical según FORMULAS.txt)
+            if k == 0:
+                ws.cell(row=r, column=estado_col, value=(b.estado if b.estado is not None else 0))
+            else:
+                ws.cell(row=r, column=estado_col, value=f"=I{r-1}")
 
             # --- ESCRITURA DE BLOQUES Q3 / Q2 / Q1 ---
             def _write_block(start_col, block):
-                if not block: return
                 # c1..c7 -> offsets 0..6
+                # Columns: c1(Temp), c2(P.In), c3(P.Out), c4(LI), c5(LF), c6(Vol), c7(Time)
+                # Replicar: c1, c2, c3, c6, c7 (Indices 0,1,2,5,6)
+                # NO Replicar (Individuales): c4, c5 (Indices 3,4 -> L.I., L.F.)
+                
+                # Índices que deben ser referencia en filas esclavas
+                shared_indices = {0, 1, 2, 5, 6} 
+
+                if not block: block = {}
+
                 for idx, key in enumerate(["c1", "c2", "c3", "c4", "c5", "c6", "c7"]):
                     val = block.get(key)
-                    if val is not None:
-                        ws.cell(row=r, column=start_col + idx, value=val)
+                    target_col = start_col + idx
+                    col_letter = get_column_letter(target_col)
+                    
+                    # Regla: Si es fila > 0 Y el campo es compartido, poner fórmula "=J9"
+                    if k > 0 and idx in shared_indices:
+                        ws.cell(row=r, column=target_col, value=f"={col_letter}{r-1}")
+                    else:
+                        # Fila 0 o campo individual (LI/LF) -> Escribir valor
+                     if val is not None:
+                        ws.cell(row=r, column=target_col, value=val)
 
             _write_block(10, row_payload.get("q3")) # J=10
             _write_block(22, row_payload.get("q2")) # V=22
@@ -242,6 +269,26 @@ def generate_excel(oi: OI, bancadas: Iterable[Bancada], password: str | None = N
             _copy_formulas(ws, DATA_START_ROW, r, FORMULA_START_COL, FORMULA_END_COL)
             # Replicar estilo (bordes, fuente, locked)
             _copy_row_styles(ws, DATA_START_ROW, ws, r, column_index_from_string(FORMULA_END_COL))
+
+            # --- FÓRMULAS DE RESULTADOS (T, U, AF, AG, AR, AS, AT) ---
+            # Estas fórmulas asumen que las columnas auxiliares (Q, S, AC...) ya existen y funcionan por _copy_formulas
+            # Ajustamos las fórmulas para la fila actual 'r'
+            
+            # Q3: T (Caudal), U (Error) -> Cols 20, 21
+            ws.cell(row=r, column=20, value=f"=+O{r}/S{r}") # T = O/S
+            ws.cell(row=r, column=21, value=f"=+(((N{r}-M{r}-O{r})/O{r})*100)") # U
+            
+            # Q2: AF (Caudal), AG (Error) -> Cols 32, 33
+            ws.cell(row=r, column=32, value=f"=+AA{r}/AE{r}") # AF = AA/AE
+            ws.cell(row=r, column=33, value=f"=+(((Z{r}-Y{r}-AA{r})/AA{r})*100)") # AG
+            
+            # Q1: AR (Caudal), AS (Error) -> Cols 44, 45
+            ws.cell(row=r, column=44, value=f"=+AM{r}/AQ{r}") # AR = AM/AQ
+            ws.cell(row=r, column=45, value=f"=+(((AL{r}-AK{r}-AM{r})/AM{r})*100)") # AS
+
+            # AT: Conformidad -> Col 46
+            # Formula: =SI(I9>=1;"NO CONFORME";SI(BK9="SIGDIFERENTES";BC9;BL9))
+            ws.cell(row=r, column=46, value=f'=SI(I{r}>=1;"NO CONFORME";SI(BK{r}="SIGDIFERENTES";BC{r};BL{r}))')
         
         # Actualizar puntero global de filas
         current_row += nrows
