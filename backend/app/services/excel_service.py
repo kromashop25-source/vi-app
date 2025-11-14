@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable, Tuple, Optional, cast
+from datetime import datetime
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils.cell import column_index_from_string
@@ -178,26 +179,68 @@ def generate_excel(oi: OI, bancadas: Iterable[Bancada], password: str | None = N
     rows = list(bancadas)
     # Ordenar por item si existe
     rows.sort(key=lambda b: (b.item or 0))
+    
+    # Datos globales para columnas B, C, D, E, H
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    presion_val = pma_to_pressure(oi.pma) if oi.pma else None
 
     current_row = DATA_START_ROW
     for i, b in enumerate(rows, start=1):
-        nrows = int(getattr(b, "rows", 15) or 15)
-        # Insertar nrows filas con estilos y fórmulas AU:BL
-        for _ in range(nrows):
-            r = current_row
-            # Autonumeración global por fila (opcional):
-            item_value = current_row - DATA_START_ROW + 1
+        # 1. Detectar fuente de filas: ¿Tiene data del Grid (rows_data) o es legacy?
+        rows_source = getattr(b, "rows_data", []) or []
+        nrows = len(rows_source) if rows_source else int(getattr(b, "rows", 15) or 15)
+
+        # 2. Iterar fila por fila
+        for k in range(nrows):
+            r = current_row + k
+            # Obtener payload de la fila k (si existe)
+            row_payload = rows_source[k] if (rows_source and k < len(rows_source)) else {}
+
+            # Col A: Item incremental
+            item_value = current_row - DATA_START_ROW + 1 + k
             ws.cell(row=r, column=1, value=item_value)
-            # "# Medidor"
-            if medidor_col is not None:
-                ws.cell(row=r, column=medidor_col, value=b.medidor or "")
-            # "Estado" (default 0 si None)
+
+            # Col B y C: Fechas
+            ws.cell(row=r, column=2, value=today_str)
+            ws.cell(row=r, column=3, value=today_str)
+
+            # Col D y E: Banco y Técnico
+            ws.cell(row=r, column=4, value=oi.banco_id)
+            ws.cell(row=r, column=5, value=oi.tech_number)
+
+            # Col G: Medidor (Prioridad: Fila > Bancada > Vacío)
+            val_medidor = row_payload.get("medidor") or b.medidor
+            if medidor_col:
+                ws.cell(row=r, column=medidor_col, value=val_medidor or "")
+
+            # Col H: Presión
+            if presion_val is not None:
+                ws.cell(row=r, column=8, value=presion_val)
+
+            # Col I: Estado
             ws.cell(row=r, column=estado_col, value=(b.estado if b.estado is not None else 0))
+
+            # --- ESCRITURA DE BLOQUES Q3 / Q2 / Q1 ---
+            def _write_block(start_col, block):
+                if not block: return
+                # c1..c7 -> offsets 0..6
+                for idx, key in enumerate(["c1", "c2", "c3", "c4", "c5", "c6", "c7"]):
+                    val = block.get(key)
+                    if val is not None:
+                        ws.cell(row=r, column=start_col + idx, value=val)
+
+            _write_block(10, row_payload.get("q3")) # J=10
+            _write_block(22, row_payload.get("q2")) # V=22
+            _write_block(34, row_payload.get("q1")) # AH=34
+
             # Copiar/ajustar fórmulas AU:BL desde fila 9 (plantilla base)
             _copy_formulas(ws, DATA_START_ROW, r, FORMULA_START_COL, FORMULA_END_COL)
-             # Replicar exactamente el estilo de la fila 9 (A..BL) DESPUÉS de escribir valores y fórmulas
+            # Replicar estilo (bordes, fuente, locked)
             _copy_row_styles(ws, DATA_START_ROW, ws, r, column_index_from_string(FORMULA_END_COL))
-            current_row += 1
+        
+        # Actualizar puntero global de filas
+        current_row += nrows
+
         # Borde inferior grueso de A a BL en la última fila de la bancada
         _apply_thick_bottom_border(ws, current_row - 1, "A", FORMULA_END_COL)
     
