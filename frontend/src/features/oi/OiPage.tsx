@@ -98,7 +98,13 @@ export default function OiPage() {
       const payload = {
         estado: Number(form.estado),
         rows: Number(form.rowsData.length),
-        rows_data: form.rowsData, // Mapping: Form(rowsData) -> API(rows_data)
+        // CORRECCIÓN: Sanitizar datos explícitamente para asegurar que medidor y bloques viajen
+        rows_data: form.rowsData.map(r => ({
+          medidor: r.medidor ?? "", 
+          q3: r.q3 ?? {},
+          q2: r.q2 ?? {},
+          q1: r.q1 ?? {}
+        })),
       };
 
       if (editing) {

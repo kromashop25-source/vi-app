@@ -173,7 +173,12 @@ def generate_excel(oi: OI, bancadas: Iterable[Bancada], password: str | None = N
         estado_col = last_col
 
     # Otras columnas conocidas (opcionales)
-    medidor_col = _find_header_col(ws, "# Medidor", header_row=HEADER_ROW)
+    medidor_col = (
+        _find_header_col(ws, "# Medidor", header_row=HEADER_ROW)
+        or _find_header_col(ws, "# Medidor", header_row=6)
+    )
+    if medidor_col is None:
+        medidor_col = column_index_from_string("G")
 
     # Escribir filas desde la 9
     rows = list(bancadas)

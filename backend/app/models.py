@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Column, JSON
+from sqlalchemy import Column
+from sqlalchemy.types import JSON
 
 class OI(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

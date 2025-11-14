@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { listOI, generateExcel, saveCurrentOI } from "../../api/oi";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { useToast } from "../../components/Toast";
 import Spinner from "../../components/Spinner";
+import PasswordModal  from "./PasswordModal";
 
 export default function OiListPage() {
     const { toast } = useToast();
@@ -13,7 +15,12 @@ export default function OiListPage() {
         queryFn: listOI,
     });
 
-    const busy = isLoading || isFetching;
+    // Estados para el flujo de Excel protegido
+    const [showPwd, setShowPwd] = useState(false);
+    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [generating, setGenerating] = useState(false);
+
+    const busy = isLoading || isFetching || generating;
 
     const handleOpen = (id: number, code: string) => {
         try {
@@ -25,14 +32,25 @@ export default function OiListPage() {
         }
     };
 
-    const handleExcel = async (id: number) => {
-        try {
-            await generateExcel(id);
+    // Paso 1: Abrir modal
+    const handleExcelClick = (id: number) => {
+        setSelectedId(id);
+        setShowPwd(true);
+    };
+
+    // Paso 2: Confirmar con password
+    const handleExcelConfirm = async (password: string) => {
+        if (!selectedId) return;
+         try {
+            setGenerating(true);
+            await generateExcel(selectedId, password);
             toast({ kind: "success", message:"Excel generado"});
         } catch (e: any) {
             toast({ kind: "error", title: "Error", message: e?.message ?? "No se pudo generar el Excel"});
-        }
-    };
+        } finally {
+            setGenerating(false);
+         }
+     };
 
     return (
         <div>
@@ -97,7 +115,7 @@ export default function OiListPage() {
                       </button>
                       <button
                         className="btn btn-sm btn-outline-secondary"
-                        onClick={() => handleExcel(r.id)}
+                        onClick={() => handleExcelClick(r.id)}
                         disabled={busy}
                         title="Descargar Excel"
                         aria-label={`Descargar Excel ${r.code}`}
@@ -112,6 +130,13 @@ export default function OiListPage() {
           </div>
         </div>
       </div>
+      
+      <PasswordModal 
+        show={showPwd} 
+        title="Contraseña para proteger Excel"
+        onClose={() => { setShowPwd(false); setSelectedId(null); }}
+        onConfirm={(pwd) => { setShowPwd(false); handleExcelConfirm(pwd); }}
+      />
     </div>
   );
 }

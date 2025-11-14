@@ -26,8 +26,7 @@ class BancadaBase(BaseModel):
     medidor: Optional[str] = None
     estado: int = Field(default=0, ge=0, le=5)
     rows: int = Field(default=15, ge=1)  # mínimo 1, por defecto 15
-    # Grid de filas por bancada (mini-planilla). Cada elemento es una fila con
-    # sus campos (# medidor, Q3, Q2, Q1, etc.), serializada como dict.
+    # Aseguramos que acepte la lista de diccionarios de la grid
     rows_data: Optional[List[dict]] = None
 
 
