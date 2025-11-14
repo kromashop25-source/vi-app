@@ -98,17 +98,18 @@ export default function OiPage() {
       const payload = {
         estado: Number(form.estado),
         rows: Number(form.rowsData.length),
-        rowsData: form.rowsData,
+        rows_data: form.rowsData, // Mapping: Form(rowsData) -> API(rows_data)
       };
 
       if (editing) {
         const upd = await updateBancada(editing.id, payload);
-        // Aseguramos tener rowsData localmente para que al reabrir el modal se vean los datos
-        setBancadas(prev => prev.map(x => x.id === upd.id ? { ...upd, rowsData: form.rowsData } : x));
+        // Al actualizar localmente, aseguramos que se guarde lo que viene del server o actualizamos la vista parcial
+        // Guardamos en local usando el nombre de la API para consistencia
+        setBancadas(prev => prev.map(x => x.id === upd.id ? upd : x));
         toast({ kind:"success", message:"Bancada actualizada" });
       } else {
         const created = await addBancada(oiId, payload);
-        setBancadas(prev => [...prev, { ...created, rowsData: form.rowsData }]);
+        setBancadas(prev => [...prev, created]);
         toast({ kind:"success", message:"Bancada agregada" });
       }
       setShowModal(false);
@@ -268,9 +269,9 @@ export default function OiPage() {
                   </tr>
                 )}
                 {bancadas.map(b => {
-                  // ABRIMOS LLAVES AQUÍ PARA PODER USAR LOGICA JAVASCRIPT
-                  const firstM = b.rowsData?.[0]?.medidor || b.medidor || "";
-                  const lastM = b.rowsData?.[(b.rowsData?.length || 0) - 1]?.medidor || "";
+                  // Si tenemos la data completa, mostramos rango de medidores
+                  const firstM = b.rows_data?.[0]?.medidor || b.medidor || "";
+                  const lastM = b.rows_data?.[(b.rows_data?.length || 0) - 1]?.medidor || "";
                   const displayMed = (firstM && lastM && firstM !== lastM) ? `${firstM} ... ${lastM}` : firstM;
 
                   // AHORA HACEMOS EL RETURN DEL JSX
@@ -324,9 +325,9 @@ export default function OiPage() {
             ? {
                 estado: editing.estado,
                 rows: editing.rows,
-                // CORRECCIÓN ROBUSTA: Mapeamos SIEMPRE para eliminar nulls
-                rowsData: editing.rowsData 
-                  ? editing.rowsData.map(r => ({
+                // Mapping inverso: API(rows_data) -> Form(rowsData)
+                rowsData: editing.rows_data 
+                  ? editing.rows_data.map(r => ({
                       // Si medidor es null, lo forzamos a "" para que el formulario no se queje
                       medidor: r.medidor ?? "",
                       // Si los bloques son null, pasamos objeto vacío {}

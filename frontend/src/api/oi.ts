@@ -32,16 +32,16 @@ export type BancadaCreate = {
   estado: number;
   rows: number;
   // Ahora enviamos la data completa de las filas
-  rowsData: BancadaRow[];
+  rows_data: BancadaRow[];
 };
 export type BancadaRead = {
   id: number;
   item: number;
-  // Mantenemos comptibilidad visual en lista, pero la data real está en rowsData
+  // Mantenemos comptibilidad visual en lista, pero la data real está en rows_data
   medidor?: string | null;
   estado: number;
   rows: number;
-  rowsData?: BancadaRow[];
+  rows_data?: BancadaRow[];
   q3?: QBlock | null;
   q2?: QBlock | null;
   q1?: QBlock | null;
