@@ -69,7 +69,15 @@ def add_bancada(oi_id: int, payload: BancadaCreate, session: Session = Depends(g
         select(Bancada.item).where(Bancada.oi_id == oi_id)
     ).all()
     next_item = (max([x or 0 for x in existing_items]) if existing_items else 0) + 1
-    b = Bancada(oi_id=oi_id, item=next_item, medidor=payload.medidor, estado=payload.estado, rows=payload.rows)
+    b = Bancada(
+        oi_id=oi_id,
+        item=next_item,
+        medidor=payload.medidor,
+        estado=payload.estado,
+        rows=payload.rows,
+        # Mini-planilla completa de la bancada (si el frontend la envía)
+        rows_data=payload.rows_data,
+    )
     session.add(b)
     session.commit()
     session.refresh(b)
@@ -108,6 +116,9 @@ def update_bancada(bancada_id: int, payload: BancadaCreate, session: Session = D
     b.medidor = payload.medidor
     b.estado = payload.estado or 0
     b.rows = payload.rows
+    # Reemplazar grid por la versión más reciente que viene del modal.
+    # Si el frontend aún no envía rows_data, esto quedará en None.
+    b.rows_data = payload.rows_data
     session.add(b)
     session.commit()
     session.refresh(b)

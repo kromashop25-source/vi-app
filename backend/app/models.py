@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, JSON
 
 class OI(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -21,7 +22,13 @@ class Bancada(SQLModel, table=True):
     item: int                       # autonum (1..n)
     # Campos mínimos de ejemplo (agrega los reales luego)
     medidor: Optional[str] = None
-    estado: int = Field(default=0, ge=0, le=5)                 # 0..5 (editable; default 0
+    estado: int = Field(default=0, ge=0, le=5)  # 0..5 (editable; default 0)
     rows: int = Field(default=15, ge=1)
+    # Grid de filas de la bancada (cada elemento representa una fila del modal/Excel).
+    # Se almacena como JSON (lista de dicts) para conservar la mini-planilla completa.
+    rows_data: Optional[List[dict]] = Field(
+        default=None,
+        sa_column=Column(JSON)
+    )
 
     oi: Optional[OI] = Relationship(back_populates="bancadas")
